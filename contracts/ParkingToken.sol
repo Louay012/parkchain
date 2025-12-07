@@ -32,7 +32,7 @@ contract ParkingToken is ERC721, ERC721URIStorage, Ownable {
 
     /**
      * @dev Mints a new parking spot token
-     * @param to Address to mint the token to
+     * @param to Address to mint the token to (the parking spot owner)
      * @param location Location of the parking spot
      * @param spotNumber Spot number identifier
      * @param pricePerHour Price per hour for parking
@@ -44,7 +44,7 @@ contract ParkingToken is ERC721, ERC721URIStorage, Ownable {
         string memory spotNumber,
         uint256 pricePerHour,
         string memory uri
-    ) public onlyOwner returns (uint256) {
+    ) public returns (uint256) {
         uint256 tokenId = _tokenIdCounter;
         _tokenIdCounter++;
         _safeMint(to, tokenId);

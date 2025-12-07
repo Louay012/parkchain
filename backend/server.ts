@@ -1,8 +1,8 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import parkingRoutes from './routes/parking.js';
-import qrRoutes from './routes/qr.js';
+import parkingRoutes from './routes/parking';
+import qrRoutes from './routes/qr';
 
 dotenv.config();
 

@@ -1,4 +1,5 @@
-import { ethers } from "hardhat";
+const hre = require("hardhat");
+const { ethers } = hre;
 
 async function main() {
   console.log("Deploying ParkChain contracts...");

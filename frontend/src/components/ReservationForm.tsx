@@ -6,6 +6,7 @@ interface ParkingSpot {
   spotNumber: string;
   pricePerHour: string;
   isAvailable: boolean;
+  ownerAddress?: string;
 }
 
 interface ReservationFormProps {
@@ -50,6 +51,14 @@ function ReservationForm({ spot, onReserve, onCancel }: ReservationFormProps) {
             <p className="text-sm text-gray-600">Token ID</p>
             <p className="font-semibold text-park-dark">#{spot.tokenId}</p>
           </div>
+          {spot.ownerAddress && (
+            <div className="col-span-2">
+              <p className="text-sm text-gray-600">Owner (Payment Recipient)</p>
+              <p className="font-mono text-sm text-park-dark">
+                {spot.ownerAddress.slice(0, 6)}...{spot.ownerAddress.slice(-4)}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -77,6 +86,9 @@ function ReservationForm({ spot, onReserve, onCancel }: ReservationFormProps) {
               {calculateTotalCost()} ETH
             </span>
           </div>
+          <p className="text-sm text-gray-600 mt-2">
+            Payment goes directly to the parking spot owner via blockchain.
+          </p>
         </div>
 
         <div className="flex space-x-4">

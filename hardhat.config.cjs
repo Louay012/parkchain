@@ -1,6 +1,6 @@
-import { defineConfig } from "hardhat/config";
+require("@nomicfoundation/hardhat-toolbox");
 
-export default defineConfig({
+module.exports = {
   solidity: {
     version: "0.8.28",
     settings: {
@@ -16,4 +16,4 @@ export default defineConfig({
     cache: "./cache",
     artifacts: "./artifacts"
   }
-});
+};

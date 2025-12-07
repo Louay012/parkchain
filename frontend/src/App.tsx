@@ -3,6 +3,7 @@ import Header from './components/Header'
 import ParkingSpotList from './components/ParkingSpotList'
 import ReservationForm from './components/ReservationForm'
 import QRCodeDisplay from './components/QRCodeDisplay'
+import ListParkingForm from './components/ListParkingForm'
 
 interface ParkingSpot {
   tokenId: number;
@@ -10,12 +11,14 @@ interface ParkingSpot {
   spotNumber: string;
   pricePerHour: string;
   isAvailable: boolean;
+  ownerAddress?: string;
 }
 
 function App() {
   const [parkingSpots, setParkingSpots] = useState<ParkingSpot[]>([]);
   const [selectedSpot, setSelectedSpot] = useState<ParkingSpot | null>(null);
   const [showReservationForm, setShowReservationForm] = useState(false);
+  const [showListForm, setShowListForm] = useState(false);
   const [qrCodeData, setQRCodeData] = useState<string | null>(null);
   const [walletAddress, setWalletAddress] = useState<string>('');
 
@@ -121,7 +124,30 @@ function App() {
           </p>
         </div>
 
-        {qrCodeData ? (
+        {/* Button for park owners to list their spots */}
+        {walletAddress && !showListForm && !showReservationForm && !qrCodeData && (
+          <div className="mb-6">
+            <button
+              onClick={() => setShowListForm(true)}
+              className="bg-green-600 text-white py-2 px-6 rounded-lg hover:bg-green-700 transition-colors"
+            >
+              + Add Your Parking Spot
+            </button>
+          </div>
+        )}
+
+        {showListForm && walletAddress ? (
+          <div className="mb-8">
+            <ListParkingForm
+              walletAddress={walletAddress}
+              onSuccess={() => {
+                setShowListForm(false);
+                fetchParkingSpots();
+              }}
+              onCancel={() => setShowListForm(false)}
+            />
+          </div>
+        ) : qrCodeData ? (
           <div className="mb-8">
             <QRCodeDisplay 
               qrCode={qrCodeData} 

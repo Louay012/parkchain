@@ -4,6 +4,7 @@ interface ParkingSpot {
   spotNumber: string;
   pricePerHour: string;
   isAvailable: boolean;
+  ownerAddress?: string;
 }
 
 interface ParkingSpotListProps {
@@ -44,6 +45,11 @@ function ParkingSpotList({ spots, onSelectSpot }: ParkingSpotListProps) {
               </span>
               <span className="text-gray-600 ml-2">ETH/hour</span>
             </div>
+            {spot.ownerAddress && (
+              <p className="text-xs text-gray-500 mt-1">
+                Owner: {spot.ownerAddress.slice(0, 6)}...{spot.ownerAddress.slice(-4)}
+              </p>
+            )}
           </div>
 
           <button
