@@ -1,171 +1,178 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./ParkingToken.sol";
 
-/**
- * @title ParkingReservation
- * @dev Manages parking spot reservations with immutable history
- */
-contract ParkingReservation is Ownable, ReentrancyGuard {
+contract ParkingReservation {
     ParkingToken public parkingToken;
 
     struct Reservation {
-        uint256 tokenId;
-        address renter;
+        uint256 id;
+        uint256 spotId;
+        address user;
         uint256 startTime;
         uint256 endTime;
-        uint256 totalCost;
+        uint256 amountPaid;
         bool isActive;
-        bool isCompleted;
     }
 
-    // Reservation counter
-    uint256 private reservationCounter;
-
-    // Mapping from reservation ID to reservation details
+    uint256 public nextReservationId = 1;
+    
+    // All reservations
     mapping(uint256 => Reservation) public reservations;
-
-    // Mapping from token ID to current active reservation
-    mapping(uint256 => uint256) public activeReservations;
-
-    // Mapping from user address to their reservation IDs
+    
+    // User's reservation IDs
     mapping(address => uint256[]) public userReservations;
+    
+    // Spot's current reservation ID (0 if none)
+    mapping(uint256 => uint256) public spotCurrentReservation;
 
-    // Events
     event ReservationCreated(
         uint256 indexed reservationId,
-        uint256 indexed tokenId,
-        address indexed renter,
+        uint256 indexed spotId,
+        address indexed user,
         uint256 startTime,
         uint256 endTime,
-        uint256 totalCost
+        uint256 amountPaid
     );
-    event ReservationCompleted(uint256 indexed reservationId);
-    event ReservationCancelled(uint256 indexed reservationId);
 
-    constructor(address _parkingTokenAddress) Ownable(msg.sender) {
-        parkingToken = ParkingToken(_parkingTokenAddress);
+    event ReservationEnded(
+        uint256 indexed reservationId,
+        uint256 indexed spotId,
+        address indexed user
+    );
+
+    constructor(address _parkingToken) {
+        parkingToken = ParkingToken(_parkingToken);
     }
 
-    /**
-     * @dev Creates a new reservation
-     * @param tokenId Token ID of the parking spot
-     * @param durationHours Duration of the reservation in hours
-     */
-    function createReservation(uint256 tokenId, uint256 durationHours) 
-        public 
-        payable 
-        nonReentrant 
-        returns (uint256) 
-    {
-        ParkingToken.ParkingSpot memory spot = parkingToken.getParkingSpot(tokenId);
-        require(spot.isAvailable, "Parking spot not available");
-        require(activeReservations[tokenId] == 0, "Parking spot already reserved");
-        
-        uint256 totalCost = spot.pricePerHour * durationHours;
-        require(msg.value >= totalCost, "Insufficient payment");
+    function createReservation(uint256 spotId, uint256 durationHours) external payable {
+        // Get spot info
+        (
+            string memory location,
+            string memory spotNumber,
+            uint256 pricePerHour,
+            bool isAvailable,
+            string memory imageURI
+        ) = parkingToken.getParkingSpot(spotId);
 
-        uint256 reservationId = reservationCounter++;
+        require(isAvailable, "Spot is not available");
+        require(durationHours > 0, "Duration must be greater than 0");
+
+        // Calculate total price
+        uint256 totalPrice = pricePerHour * durationHours;
+        require(msg.value >= totalPrice, "Insufficient payment");
+
+        // Get spot owner and transfer payment
+        address spotOwner = parkingToken.ownerOf(spotId);
+        require(spotOwner != address(0), "Invalid spot owner");
+        
+        // Transfer payment directly to spot owner
+        (bool success, ) = payable(spotOwner).call{value: msg.value}("");
+        require(success, "Payment transfer failed");
+
+        // Calculate times
         uint256 startTime = block.timestamp;
         uint256 endTime = startTime + (durationHours * 1 hours);
 
+        // Create reservation
+        uint256 reservationId = nextReservationId++;
         reservations[reservationId] = Reservation({
-            tokenId: tokenId,
-            renter: msg.sender,
+            id: reservationId,
+            spotId: spotId,
+            user: msg.sender,
             startTime: startTime,
             endTime: endTime,
-            totalCost: totalCost,
-            isActive: true,
-            isCompleted: false
+            amountPaid: msg.value,
+            isActive: true
         });
 
-        activeReservations[tokenId] = reservationId;
+        // Track reservation
         userReservations[msg.sender].push(reservationId);
+        spotCurrentReservation[spotId] = reservationId;
 
-        // Transfer payment to parking spot owner
-        address spotOwner = parkingToken.ownerOf(tokenId);
-        (bool success, ) = spotOwner.call{value: totalCost}("");
-        require(success, "Payment transfer failed");
+        // Mark spot as unavailable
+        parkingToken.setSpotAvailability(spotId, false);
 
-        // Refund excess payment
-        if (msg.value > totalCost) {
-            (bool refundSuccess, ) = msg.sender.call{value: msg.value - totalCost}("");
-            require(refundSuccess, "Refund failed");
-        }
-
-        emit ReservationCreated(reservationId, tokenId, msg.sender, startTime, endTime, totalCost);
-        return reservationId;
-    }
-
-    /**
-     * @dev Completes a reservation
-     * @param reservationId ID of the reservation
-     */
-    function completeReservation(uint256 reservationId) public {
-        Reservation storage reservation = reservations[reservationId];
-        require(reservation.isActive, "Reservation not active");
-        require(
-            msg.sender == reservation.renter || msg.sender == owner(),
-            "Not authorized"
+        emit ReservationCreated(
+            reservationId,
+            spotId,
+            msg.sender,
+            startTime,
+            endTime,
+            msg.value
         );
-        require(block.timestamp >= reservation.endTime, "Reservation not yet ended");
-
-        reservation.isActive = false;
-        reservation.isCompleted = true;
-        activeReservations[reservation.tokenId] = 0;
-
-        emit ReservationCompleted(reservationId);
     }
 
-    /**
-     * @dev Cancels a reservation (only before start time)
-     * @param reservationId ID of the reservation
-     */
-    function cancelReservation(uint256 reservationId) public nonReentrant {
+    function endReservation(uint256 reservationId) external {
         Reservation storage reservation = reservations[reservationId];
-        require(reservation.isActive, "Reservation not active");
-        require(msg.sender == reservation.renter, "Not authorized");
-        require(block.timestamp < reservation.startTime, "Cannot cancel ongoing reservation");
+        
+        require(reservation.id != 0, "Reservation does not exist");
+        require(reservation.isActive, "Reservation already ended");
+        require(
+            msg.sender == reservation.user || block.timestamp >= reservation.endTime,
+            "Only user can end early, or wait until time expires"
+        );
 
+        // End reservation
         reservation.isActive = false;
-        activeReservations[reservation.tokenId] = 0;
+        spotCurrentReservation[reservation.spotId] = 0;
 
-        // Refund 90% (10% cancellation fee)
-        uint256 refundAmount = (reservation.totalCost * 90) / 100;
-        (bool success, ) = reservation.renter.call{value: refundAmount}("");
-        require(success, "Refund failed");
+        // Mark spot as available again
+        parkingToken.setSpotAvailability(reservation.spotId, true);
 
-        emit ReservationCancelled(reservationId);
+        emit ReservationEnded(reservationId, reservation.spotId, reservation.user);
     }
 
-    /**
-     * @dev Gets all reservations for a user
-     * @param user Address of the user
-     */
-    function getUserReservations(address user) public view returns (uint256[] memory) {
-        return userReservations[user];
-    }
-
-    /**
-     * @dev Gets reservation details
-     * @param reservationId ID of the reservation
-     */
-    function getReservation(uint256 reservationId) public view returns (Reservation memory) {
+    function getReservation(uint256 reservationId) external view returns (Reservation memory) {
         return reservations[reservationId];
     }
 
-    /**
-     * @dev Checks if a parking spot is currently reserved
-     * @param tokenId Token ID of the parking spot
-     */
-    function isSpotReserved(uint256 tokenId) public view returns (bool) {
-        uint256 activeReservationId = activeReservations[tokenId];
-        if (activeReservationId == 0) return false;
+    function getUserReservations(address user) external view returns (Reservation[] memory) {
+        uint256[] memory userResIds = userReservations[user];
+        Reservation[] memory result = new Reservation[](userResIds.length);
         
-        Reservation memory reservation = reservations[activeReservationId];
-        return reservation.isActive && block.timestamp < reservation.endTime;
+        for (uint256 i = 0; i < userResIds.length; i++) {
+            result[i] = reservations[userResIds[i]];
+        }
+        
+        return result;
+    }
+
+    function getActiveUserReservations(address user) external view returns (Reservation[] memory) {
+        uint256[] memory userResIds = userReservations[user];
+        
+        // Count active reservations
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < userResIds.length; i++) {
+            if (reservations[userResIds[i]].isActive) {
+                activeCount++;
+            }
+        }
+        
+        // Build result array
+        Reservation[] memory result = new Reservation[](activeCount);
+        uint256 index = 0;
+        for (uint256 i = 0; i < userResIds.length; i++) {
+            if (reservations[userResIds[i]].isActive) {
+                result[index++] = reservations[userResIds[i]];
+            }
+        }
+        
+        return result;
+    }
+
+    function isSpotAvailable(uint256 spotId) external view returns (bool) {
+        uint256 currentResId = spotCurrentReservation[spotId];
+        if (currentResId == 0) return true;
+        
+        Reservation memory res = reservations[currentResId];
+        // Available if reservation ended or expired
+        return !res.isActive || block.timestamp >= res.endTime;
+    }
+
+    function getSpotCurrentReservation(uint256 spotId) external view returns (Reservation memory) {
+        uint256 currentResId = spotCurrentReservation[spotId];
+        return reservations[currentResId];
     }
 }

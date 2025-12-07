@@ -2,7 +2,7 @@ const hre = require("hardhat");
 const { ethers } = hre;
 
 async function main() {
-  console.log("Deploying ParkChain contracts...");
+  console.log("Deploying ParkChain contracts...\n");
 
   // Deploy ParkingToken
   const ParkingToken = await ethers.getContractFactory("ParkingToken");
@@ -18,54 +18,48 @@ async function main() {
   const parkingReservationAddress = await parkingReservation.getAddress();
   console.log(`ParkingReservation deployed to: ${parkingReservationAddress}`);
 
-  // Deploy PaymentProcessor
-  const PaymentProcessor = await ethers.getContractFactory("PaymentProcessor");
-  const paymentProcessor = await PaymentProcessor.deploy();
-  await paymentProcessor.waitForDeployment();
-  const paymentProcessorAddress = await paymentProcessor.getAddress();
-  console.log(`PaymentProcessor deployed to: ${paymentProcessorAddress}`);
+  // Link ParkingReservation to ParkingToken (so it can change availability)
+  const tx = await parkingToken.setReservationContract(parkingReservationAddress);
+  await tx.wait();
+  console.log(`ParkingToken linked to ParkingReservation`);
 
   console.log("\n=== Deployment Summary ===");
   console.log(`ParkingToken: ${parkingTokenAddress}`);
   console.log(`ParkingReservation: ${parkingReservationAddress}`);
-  console.log(`PaymentProcessor: ${paymentProcessorAddress}`);
   console.log("==========================\n");
 
-  // Mint some example parking spots
+  // Mint example parking spots
   console.log("Minting example parking spots...");
   const [deployer] = await ethers.getSigners();
-  
-  const tx1 = await parkingToken.mintParkingSpot(
+
+  await (await parkingToken.mintParkingSpot(
     deployer.address,
     "Downtown Plaza",
     "A-101",
     ethers.parseEther("0.01"),
     "ipfs://QmExample1"
-  );
-  await tx1.wait();
-  console.log("Minted parking spot: Downtown Plaza A-101");
+  )).wait();
+  console.log("Minted: Downtown Plaza A-101");
 
-  const tx2 = await parkingToken.mintParkingSpot(
+  await (await parkingToken.mintParkingSpot(
     deployer.address,
     "City Center Mall",
     "B-205",
     ethers.parseEther("0.015"),
     "ipfs://QmExample2"
-  );
-  await tx2.wait();
-  console.log("Minted parking spot: City Center Mall B-205");
+  )).wait();
+  console.log("Minted: City Center Mall B-205");
 
-  const tx3 = await parkingToken.mintParkingSpot(
+  await (await parkingToken.mintParkingSpot(
     deployer.address,
     "Airport Parking",
     "C-310",
     ethers.parseEther("0.02"),
     "ipfs://QmExample3"
-  );
-  await tx3.wait();
-  console.log("Minted parking spot: Airport Parking C-310");
+  )).wait();
+  console.log("Minted: Airport Parking C-310");
 
-  console.log("\nDeployment completed successfully!");
+  console.log("\n✅ Deployment completed successfully!");
 }
 
 main()

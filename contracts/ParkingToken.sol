@@ -5,109 +5,99 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-/**
- * @title ParkingToken
- * @dev ERC721 token representing parking spot ownership
- * Each token represents a unique parking spot with metadata
- */
 contract ParkingToken is ERC721, ERC721URIStorage, Ownable {
-    uint256 private _tokenIdCounter;
+    uint256 private _nextTokenId = 1;
 
     struct ParkingSpot {
         string location;
         string spotNumber;
         uint256 pricePerHour;
         bool isAvailable;
+        string imageURI;
     }
 
-    // Mapping from token ID to parking spot details
     mapping(uint256 => ParkingSpot) public parkingSpots;
+    
+    // Address authorized to change spot availability (ParkingReservation contract)
+    address public reservationContract;
 
-    // Events
-    event ParkingSpotCreated(uint256 indexed tokenId, string location, string spotNumber, uint256 pricePerHour);
-    event ParkingSpotAvailabilityChanged(uint256 indexed tokenId, bool isAvailable);
-    event ParkingSpotPriceUpdated(uint256 indexed tokenId, uint256 newPrice);
+    event ParkingSpotMinted(
+        uint256 indexed tokenId,
+        address indexed owner,
+        string location,
+        string spotNumber,
+        uint256 pricePerHour
+    );
+
+    event SpotAvailabilityChanged(uint256 indexed tokenId, bool isAvailable);
 
     constructor() ERC721("ParkingToken", "PARK") Ownable(msg.sender) {}
 
-    /**
-     * @dev Mints a new parking spot token
-     * @param to Address to mint the token to (the parking spot owner)
-     * @param location Location of the parking spot
-     * @param spotNumber Spot number identifier
-     * @param pricePerHour Price per hour for parking
-     * @param uri Metadata URI for the token
-     */
+    function setReservationContract(address _reservationContract) external onlyOwner {
+        reservationContract = _reservationContract;
+    }
+
     function mintParkingSpot(
         address to,
         string memory location,
         string memory spotNumber,
         uint256 pricePerHour,
-        string memory uri
+        string memory imageURI
     ) public returns (uint256) {
-        uint256 tokenId = _tokenIdCounter;
-        _tokenIdCounter++;
+        uint256 tokenId = _nextTokenId++;
+
         _safeMint(to, tokenId);
-        _setTokenURI(tokenId, uri);
+        _setTokenURI(tokenId, imageURI);
 
         parkingSpots[tokenId] = ParkingSpot({
             location: location,
             spotNumber: spotNumber,
             pricePerHour: pricePerHour,
-            isAvailable: true
+            isAvailable: true,
+            imageURI: imageURI
         });
 
-        emit ParkingSpotCreated(tokenId, location, spotNumber, pricePerHour);
+        emit ParkingSpotMinted(tokenId, to, location, spotNumber, pricePerHour);
+
         return tokenId;
     }
 
-    /**
-     * @dev Updates parking spot availability
-     * @param tokenId Token ID of the parking spot
-     * @param isAvailable New availability status
-     */
-    function setAvailability(uint256 tokenId, bool isAvailable) public {
-        require(_ownerOf(tokenId) == msg.sender || owner() == msg.sender, "Not authorized");
+    function setSpotAvailability(uint256 tokenId, bool isAvailable) external {
+        require(
+            msg.sender == reservationContract || msg.sender == ownerOf(tokenId),
+            "Not authorized"
+        );
         parkingSpots[tokenId].isAvailable = isAvailable;
-        emit ParkingSpotAvailabilityChanged(tokenId, isAvailable);
+        emit SpotAvailabilityChanged(tokenId, isAvailable);
     }
 
-    /**
-     * @dev Updates parking spot price
-     * @param tokenId Token ID of the parking spot
-     * @param newPrice New price per hour
-     */
-    function updatePrice(uint256 tokenId, uint256 newPrice) public {
-        require(_ownerOf(tokenId) == msg.sender || owner() == msg.sender, "Not authorized");
-        parkingSpots[tokenId].pricePerHour = newPrice;
-        emit ParkingSpotPriceUpdated(tokenId, newPrice);
+    function getParkingSpot(uint256 tokenId) external view returns (
+        string memory location,
+        string memory spotNumber,
+        uint256 pricePerHour,
+        bool isAvailable,
+        string memory imageURI
+    ) {
+        ParkingSpot memory spot = parkingSpots[tokenId];
+        return (
+            spot.location,
+            spot.spotNumber,
+            spot.pricePerHour,
+            spot.isAvailable,
+            spot.imageURI
+        );
     }
 
-    /**
-     * @dev Get parking spot details
-     * @param tokenId Token ID of the parking spot
-     */
-    function getParkingSpot(uint256 tokenId) public view returns (ParkingSpot memory) {
-        require(_ownerOf(tokenId) != address(0), "Parking spot does not exist");
-        return parkingSpots[tokenId];
+    function totalSupply() public view returns (uint256) {
+        return _nextTokenId - 1;
     }
 
-    // The following functions are overrides required by Solidity.
-    function tokenURI(uint256 tokenId)
-        public
-        view
-        override(ERC721, ERC721URIStorage)
-        returns (string memory)
-    {
+    // Required overrides
+    function tokenURI(uint256 tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
         return super.tokenURI(tokenId);
     }
 
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(ERC721, ERC721URIStorage)
-        returns (bool)
-    {
+    function supportsInterface(bytes4 interfaceId) public view override(ERC721, ERC721URIStorage) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 }
