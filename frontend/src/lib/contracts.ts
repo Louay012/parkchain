@@ -1,8 +1,7 @@
 // Contract configuration
 export const CONTRACTS = {
-  PARKING_TOKEN: "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
-  PARKING_RESERVATION: "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9",
-  PAYMENT_PROCESSOR: "0x5fc8d32690cc91d4c39d9d3abcbd16989f875707",
+  PARKING_TOKEN: "0xa7A50B7083358d3c18a792C641d7c1b5d512c309",
+  PARKING_RESERVATION: "0x3a602B46F173D0b358f668f076C24A1f3C92F26b",
 } as const
 
 export const PARKING_TOKEN_ABI = [
@@ -44,8 +43,8 @@ export const PAYMENT_PROCESSOR_ABI = [
 
 export const NETWORK = {
   CHAIN_ID: 1337,
-  NAME: "Ganache Local",
-  RPC_URL: "http://127.0.0.1:7545",
+  NAME: "Ganache",
+  RPC_URL: "http://127.0.0.1:7545",  // Changed from 8545 to 7545
 } as const
 
 export const API = {

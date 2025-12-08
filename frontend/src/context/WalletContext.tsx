@@ -36,6 +36,60 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setBalance(ethers.formatEther(bal))
     } catch (error) {
       console.error("Failed to fetch balance:", error)
+      setBalance("0")
+    }
+  }, [])
+
+  const switchNetwork = useCallback(async () => {
+    if (!window.ethereum) {
+      toast.error("MetaMask not found")
+      return
+    }
+
+    try {
+      console.log("Attempting to switch to chain:", NETWORK.CHAIN_ID)
+      const chainIdHex = `0x${NETWORK.CHAIN_ID.toString(16)}`
+      
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: chainIdHex }],
+      })
+      
+      // Wait for chain to actually switch
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      toast.success("Switched to Hardhat network")
+    } catch (error: any) {
+      console.error("Switch network error:", error.code, error.message)
+      
+      if (error.code === 4902) {
+        try {
+          console.log("Network not found, adding it...")
+          const chainIdHex = `0x${NETWORK.CHAIN_ID.toString(16)}`
+          
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [
+              {
+                chainId: chainIdHex,
+                chainName: NETWORK.NAME,
+                nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+                rpcUrls: [NETWORK.RPC_URL],
+                blockExplorerUrls: [],
+              },
+            ],
+          })
+          
+          // Wait for network to be added
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+          toast.success("Hardhat network added successfully")
+        } catch (addError) {
+          console.error("Failed to add network:", addError)
+          toast.error("Failed to add Hardhat network")
+        }
+      } else {
+        console.error("Failed to switch network:", error)
+        toast.error("Failed to switch network. Please switch manually in MetaMask.")
+      }
     }
   }, [])
 
@@ -56,16 +110,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setSigner(sign)
       setAccount(accounts[0])
       setChainId(Number(network.chainId))
+      
+      console.log("Connected account:", accounts[0])
+      console.log("Current chain ID:", Number(network.chainId))
+      console.log("Expected chain ID:", NETWORK.CHAIN_ID)
+
+      // Update balance
       await updateBalance(accounts[0], prov)
+
+      // Switch network if needed
+      if (Number(network.chainId) !== NETWORK.CHAIN_ID) {
+        console.log("Wrong network, switching...")
+        await switchNetwork()
+        // Wait and reconnect to get updated network
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+        const newNetwork = await prov.getNetwork()
+        setChainId(Number(newNetwork.chainId))
+      }
 
       toast.success("Wallet connected successfully!")
     } catch (error: any) {
       console.error("Failed to connect wallet:", error)
       toast.error(error.message || "Failed to connect wallet")
+      setIsConnecting(false)
     } finally {
       setIsConnecting(false)
     }
-  }, [updateBalance])
+  }, [updateBalance, switchNetwork])
 
   const disconnectWallet = useCallback(() => {
     setAccount(null)
@@ -76,41 +147,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     toast.info("Wallet disconnected")
   }, [])
 
-  const switchNetwork = useCallback(async () => {
-    if (!window.ethereum) return
-
-    try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: `0x${NETWORK.CHAIN_ID.toString(16)}` }],
-      })
-    } catch (error: any) {
-      if (error.code === 4902) {
-        try {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [
-              {
-                chainId: `0x${NETWORK.CHAIN_ID.toString(16)}`,
-                chainName: NETWORK.NAME,
-                nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-                rpcUrls: [NETWORK.RPC_URL],
-              },
-            ],
-          })
-        } catch {
-          toast.error("Failed to add network")
-        }
-      } else {
-        toast.error("Failed to switch network")
-      }
-    }
-  }, [])
-
   useEffect(() => {
     if (typeof window === "undefined" || !window.ethereum) return
 
     const handleAccountsChanged = (accounts: string[]) => {
+      console.log("Accounts changed:", accounts)
       if (accounts.length === 0) {
         disconnectWallet()
       } else if (accounts[0] !== account) {
@@ -122,7 +163,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
 
     const handleChainChanged = (chainIdHex: string) => {
-      setChainId(Number.parseInt(chainIdHex, 16))
+      console.log("Chain changed to:", chainIdHex)
+      const newChainId = Number.parseInt(chainIdHex, 16)
+      setChainId(newChainId)
+      
+      if (newChainId !== NETWORK.CHAIN_ID) {
+        toast.error("You are on the wrong network. Please switch to Hardhat.")
+      } else {
+        toast.success("Switched to correct network!")
+      }
     }
 
     window.ethereum.on("accountsChanged", handleAccountsChanged)
@@ -145,6 +194,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (accounts.length > 0) {
           const network = await prov.getNetwork()
           const sign = await prov.getSigner()
+
+          console.log("Auto-connecting to:", accounts[0].address, "Chain ID:", Number(network.chainId))
 
           setProvider(prov)
           setSigner(sign)
