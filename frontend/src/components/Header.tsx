@@ -99,9 +99,10 @@ export function Header({ onMenuClick }: HeaderProps) {
                 </a>
                 <div className="h-px bg-border" />
                 <button
-                  onClick={() => {
+                  onClick={ () => {
                     disconnectWallet()
                     setDropdownOpen(false)
+                    
                   }}
                   className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-destructive hover:bg-secondary"
                 >
@@ -113,7 +114,15 @@ export function Header({ onMenuClick }: HeaderProps) {
           </div>
         ) : (
           <button
-            onClick={connectWallet}
+            onClick={async() =>{ 
+              connectWallet()
+              if (window.ethereum) {
+                      await window.ethereum.request({
+                        method: 'wallet_requestPermissions',
+                        params: [{ eth_accounts: {} }]
+                      });
+                    }
+            }}
             disabled={isConnecting}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >

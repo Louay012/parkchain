@@ -1,8 +1,7 @@
 // Contract configuration
 export const CONTRACTS = {
-  PARKING_TOKEN: "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
-  PARKING_RESERVATION: "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9",
-  PAYMENT_PROCESSOR: "0x5fc8d32690cc91d4c39d9d3abcbd16989f875707",
+  PARKING_TOKEN: "0xb276b789BA86e6c0eCDd32501b73C919c92AC07A",
+  PARKING_RESERVATION: "0x369452F72147BB4d1f0B6dE21760ec1C4fd411aF",
 } as const
 
 export const PARKING_TOKEN_ABI = [
@@ -42,9 +41,9 @@ export const PAYMENT_PROCESSOR_ABI = [
   "event FundsWithdrawn(address indexed owner, uint256 amount)",
 ] as const
 export const NETWORK = {
-  CHAIN_ID: 31337,
-  NAME: "Hardhat Localhost",
-  RPC_URL: "http://127.0.0.1:8545",
+  CHAIN_ID: 1337,
+  NAME: "Ganache",
+  RPC_URL: "http://127.0.0.1:7545",  // Changed from 8545 to 7545
 } as const
 
 
