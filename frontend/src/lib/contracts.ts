@@ -41,12 +41,12 @@ export const PAYMENT_PROCESSOR_ABI = [
   "event PlatformFeeUpdated(uint256 newFeePercentage)",
   "event FundsWithdrawn(address indexed owner, uint256 amount)",
 ] as const
-
 export const NETWORK = {
-  CHAIN_ID: 1337,
-  NAME: "Ganache Local",
-  RPC_URL: "http://127.0.0.1:7545",
+  CHAIN_ID: 31337,
+  NAME: "Hardhat Localhost",
+  RPC_URL: "http://127.0.0.1:8545",
 } as const
+
 
 export const API = {
   BASE_URL: "http://localhost:3001/api",
