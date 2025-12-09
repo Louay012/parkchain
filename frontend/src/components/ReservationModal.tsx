@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { ethers } from "ethers"
 import { useWallet } from "../context/WalletContext"
 import { CONTRACTS, PARKING_RESERVATION_ABI } from "../lib/contracts"
-import { MapPin, Loader2, X } from "lucide-react"
+import { MapPin, Loader2, X, Clock } from "lucide-react"
 import { toast } from "sonner"
 import type { ParkingSpot, Reservation } from "../types"
 
@@ -15,20 +15,72 @@ interface ReservationModalProps {
   onSuccess: (reservation: Reservation) => void
 }
 
+// Helper to format timestamp to datetime-local input value
+const formatDateTimeLocal = (timestamp: number) => {
+  const date = new Date(timestamp * 1000)
+  return date.toISOString().slice(0, 16)
+}
+
+// Helper to get current time rounded up to nearest 5 minutes
+const getCurrentTimeRounded = () => {
+  const now = Math.floor(Date.now() / 1000)
+  return now + (300 - (now % 300)) // Round up to next 5 minutes
+}
+
+// Helper to get duration in hours
+const getDurationHours = (startTime: string, endTime: string) => {
+  if (!startTime || !endTime) return 0
+  const start = new Date(startTime).getTime()
+  const end = new Date(endTime).getTime()
+  return Math.max(0, Math.ceil((end - start) / (1000 * 60 * 60)))
+}
+
 export function ReservationModal({ spot, open, onOpenChange, onSuccess }: ReservationModalProps) {
   const { signer, account } = useWallet()
-  const [duration, setDuration] = useState(1)
+  const [startTime, setStartTime] = useState("")
+  const [endTime, setEndTime] = useState("")
   const [loading, setLoading] = useState(false)
 
-  const totalPrice = spot ? (Number.parseFloat(spot.pricePerHour) * duration).toFixed(6) : "0"
+  const durationHours = getDurationHours(startTime, endTime)
+  const totalPrice = spot ? (Number.parseFloat(spot.pricePerHour) * durationHours).toFixed(6) : "0"
 
   useEffect(() => {
-    if (open) setDuration(1)
-  }, [open])
+    if (open && spot) {
+      // Set default times - start from now (or availableFrom if in future), not from past availability
+      const now = getCurrentTimeRounded()
+      const effectiveStart = Math.max(now, spot.availableFrom)
+      setStartTime(formatDateTimeLocal(effectiveStart))
+      setEndTime(formatDateTimeLocal(Math.min(effectiveStart + 3600, spot.availableTo))) // Default 1 hour
+    }
+  }, [open, spot])
 
   const handleReserve = async () => {
     if (!signer || !account || !spot) {
       toast.error("Please connect your wallet")
+      return
+    }
+
+    if (!startTime || !endTime) {
+      toast.error("Please select start and end times")
+      return
+    }
+
+    const startTimestamp = Math.floor(new Date(startTime).getTime() / 1000)
+    const endTimestamp = Math.floor(new Date(endTime).getTime() / 1000)
+    const now = Math.floor(Date.now() / 1000)
+
+    if (endTimestamp <= startTimestamp) {
+      toast.error("End time must be after start time")
+      return
+    }
+
+    if (startTimestamp < now) {
+      toast.error("Start time must be in the future")
+      return
+    }
+
+    if (startTimestamp < spot.availableFrom || endTimestamp > spot.availableTo) {
+      toast.error("Selected time is outside spot availability")
       return
     }
 
@@ -37,7 +89,7 @@ export function ReservationModal({ spot, open, onOpenChange, onSuccess }: Reserv
       const contract = new ethers.Contract(CONTRACTS.PARKING_RESERVATION, PARKING_RESERVATION_ABI, signer)
       const priceInWei = ethers.parseEther(totalPrice)
 
-      const tx = await contract.createReservation(spot.id, duration, { value: priceInWei })
+      const tx = await contract.createReservation(spot.id, startTimestamp, endTimestamp, { value: priceInWei })
       toast.info("Transaction submitted. Waiting for confirmation...")
       const receipt = await tx.wait()
 
@@ -57,13 +109,12 @@ export function ReservationModal({ spot, open, onOpenChange, onSuccess }: Reserv
         reservationId = Number(parsed?.args[0])
       }
 
-      const now = Math.floor(Date.now() / 1000)
       const reservation: Reservation = {
         id: reservationId,
         spotId: spot.id,
         user: account,
-        startTime: now,
-        endTime: now + duration * 3600,
+        startTime: startTimestamp,
+        endTime: endTimestamp,
         amountPaid: totalPrice,
         isActive: true,
         spotDetails: spot,
@@ -72,13 +123,25 @@ export function ReservationModal({ spot, open, onOpenChange, onSuccess }: Reserv
       onSuccess(reservation)
     } catch (error: any) {
       console.error("Failed to create reservation:", error)
-      toast.error(error.reason || "Failed to create reservation")
+      // Extract error message from various possible locations
+      const errorMessage = error.reason || 
+        error.data?.message || 
+        error.error?.message ||
+        error.message ||
+        "Failed to create reservation"
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }
   }
 
   if (!open || !spot) return null
+
+  // Minimum datetime is either now or spot availability start (whichever is later)
+  const now = getCurrentTimeRounded()
+  const effectiveMinTime = Math.max(now, spot.availableFrom)
+  const minDateTime = formatDateTimeLocal(effectiveMinTime)
+  const maxDateTime = formatDateTimeLocal(spot.availableTo)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -91,7 +154,7 @@ export function ReservationModal({ spot, open, onOpenChange, onSuccess }: Reserv
         </button>
 
         <h2 className="text-lg font-semibold">Reserve Parking Spot</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Configure your reservation duration and confirm payment</p>
+        <p className="mt-1 text-sm text-muted-foreground">Select your reservation time and confirm payment</p>
 
         <div className="mt-6 space-y-4">
           {/* Spot Info */}
@@ -104,26 +167,42 @@ export function ReservationModal({ spot, open, onOpenChange, onSuccess }: Reserv
                 <h4 className="font-semibold">{spot.location}</h4>
                 <p className="text-sm text-muted-foreground">Spot #{spot.spotNumber}</p>
                 <p className="text-sm font-medium text-primary">{spot.pricePerHour} ETH/hour</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Available: {new Date(spot.availableFrom * 1000).toLocaleString()} - {new Date(spot.availableTo * 1000).toLocaleString()}
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Duration Selector */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium">
-              Duration: {duration} hour{duration > 1 ? "s" : ""}
-            </label>
-            <input
-              type="range"
-              min={1}
-              max={24}
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full accent-primary"
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>1 hour</span>
-              <span>24 hours</span>
+          {/* Time Selection */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Start Time</label>
+              <div className="relative">
+                <Clock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="datetime-local"
+                  value={startTime}
+                  min={minDateTime}
+                  max={maxDateTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">End Time</label>
+              <div className="relative">
+                <Clock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="datetime-local"
+                  value={endTime}
+                  min={startTime || minDateTime}
+                  max={maxDateTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
             </div>
           </div>
 
@@ -138,7 +217,7 @@ export function ReservationModal({ spot, open, onOpenChange, onSuccess }: Reserv
             <div className="flex justify-between">
               <span className="text-muted-foreground">Duration</span>
               <span>
-                {duration} hour{duration > 1 ? "s" : ""}
+                {durationHours} hour{durationHours !== 1 ? "s" : ""}
               </span>
             </div>
             <div className="h-px bg-border" />
@@ -158,7 +237,7 @@ export function ReservationModal({ spot, open, onOpenChange, onSuccess }: Reserv
           </button>
           <button
             onClick={handleReserve}
-            disabled={loading}
+            disabled={loading || durationHours === 0}
             className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {loading ? (

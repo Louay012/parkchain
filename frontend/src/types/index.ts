@@ -8,6 +8,8 @@ export interface ParkingSpot {
   isAvailable: boolean
   imageURI: string
   owner: string
+  availableFrom: number
+  availableTo: number
 }
 
 export interface Reservation {

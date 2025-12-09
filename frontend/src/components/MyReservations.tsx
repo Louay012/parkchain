@@ -95,8 +95,31 @@ export function MyReservations({ onShowQR }: MyReservationsProps) {
       const contract = new ethers.Contract(CONTRACTS.PARKING_RESERVATION, PARKING_RESERVATION_ABI, signer)
       const tx = await contract.endReservation(reservationId)
       toast.info("Transaction submitted...")
-      await tx.wait()
-      toast.success("Reservation ended successfully!")
+      const receipt = await tx.wait()
+      
+      // Parse the ReservationEnded event to get refund info
+      const iface = new ethers.Interface(PARKING_RESERVATION_ABI)
+      const log = receipt.logs.find((log: any) => {
+        try {
+          const parsed = iface.parseLog(log)
+          return parsed?.name === "ReservationEnded"
+        } catch {
+          return false
+        }
+      })
+
+      if (log) {
+        const parsed = iface.parseLog(log)
+        const userRefund = parsed?.args[4] // 5th arg is userRefund
+        if (userRefund && userRefund > 0n) {
+          toast.success(`Reservation ended! Refund: ${ethers.formatEther(userRefund)} ETH`)
+        } else {
+          toast.success("Reservation ended successfully!")
+        }
+      } else {
+        toast.success("Reservation ended successfully!")
+      }
+      
       fetchReservations()
     } catch (error: any) {
       console.error("Failed to end reservation:", error)

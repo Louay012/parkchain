@@ -14,6 +14,8 @@ contract ParkingToken is ERC721, ERC721URIStorage, Ownable {
         uint256 pricePerHour;
         bool isAvailable;
         string imageURI;
+        uint256 availableFrom;
+        uint256 availableTo;
     }
 
     mapping(uint256 => ParkingSpot) public parkingSpots;
@@ -42,8 +44,12 @@ contract ParkingToken is ERC721, ERC721URIStorage, Ownable {
         string memory location,
         string memory spotNumber,
         uint256 pricePerHour,
-        string memory imageURI
+        string memory imageURI,
+        uint256 availableFrom,
+        uint256 availableTo
     ) public returns (uint256) {
+        require(availableTo > availableFrom, "End time must be after start time");
+        
         uint256 tokenId = _nextTokenId++;
 
         _safeMint(to, tokenId);
@@ -54,7 +60,9 @@ contract ParkingToken is ERC721, ERC721URIStorage, Ownable {
             spotNumber: spotNumber,
             pricePerHour: pricePerHour,
             isAvailable: true,
-            imageURI: imageURI
+            imageURI: imageURI,
+            availableFrom: availableFrom,
+            availableTo: availableTo
         });
 
         emit ParkingSpotMinted(tokenId, to, location, spotNumber, pricePerHour);
@@ -76,7 +84,9 @@ contract ParkingToken is ERC721, ERC721URIStorage, Ownable {
         string memory spotNumber,
         uint256 pricePerHour,
         bool isAvailable,
-        string memory imageURI
+        string memory imageURI,
+        uint256 availableFrom,
+        uint256 availableTo
     ) {
         ParkingSpot memory spot = parkingSpots[tokenId];
         return (
@@ -84,7 +94,9 @@ contract ParkingToken is ERC721, ERC721URIStorage, Ownable {
             spot.spotNumber,
             spot.pricePerHour,
             spot.isAvailable,
-            spot.imageURI
+            spot.imageURI,
+            spot.availableFrom,
+            spot.availableTo
         );
     }
 

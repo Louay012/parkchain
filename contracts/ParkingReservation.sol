@@ -14,6 +14,7 @@ contract ParkingReservation {
         uint256 endTime;
         uint256 amountPaid;
         bool isActive;
+        bool isPaidOut;  // Whether owner has been paid
     }
 
     uint256 public nextReservationId = 1;
@@ -39,43 +40,45 @@ contract ParkingReservation {
     event ReservationEnded(
         uint256 indexed reservationId,
         uint256 indexed spotId,
-        address indexed user
+        address indexed user,
+        uint256 ownerPayout,
+        uint256 userRefund
     );
 
     constructor(address _parkingToken) {
         parkingToken = ParkingToken(_parkingToken);
     }
 
-    function createReservation(uint256 spotId, uint256 durationHours) external payable {
-        // Get spot info
+    function createReservation(uint256 spotId, uint256 startTime, uint256 endTime) external payable {
+        require(startTime < endTime, "Start time must be before end time");
+        require(startTime >= block.timestamp, "Start time must be in the future");
+        
+        // Get spot info - only what we need
         (
-            string memory location,
-            string memory spotNumber,
+            ,  // location
+            ,  // spotNumber
             uint256 pricePerHour,
             bool isAvailable,
-            string memory imageURI
+            ,  // imageURI
+            uint256 availableFrom,
+            uint256 availableTo
         ) = parkingToken.getParkingSpot(spotId);
 
         require(isAvailable, "Spot is not available");
-        require(durationHours > 0, "Duration must be greater than 0");
+        require(startTime >= availableFrom, "Reservation starts before spot availability");
+        require(endTime <= availableTo, "Reservation ends after spot availability");
 
-        // Calculate total price
-        uint256 totalPrice = pricePerHour * durationHours;
-        require(msg.value >= totalPrice, "Insufficient payment");
+        // Calculate duration in hours (rounded up) and total price
+        uint256 durationHours = (endTime - startTime + 3599) / 3600;
+        require(msg.value >= pricePerHour * durationHours, "Insufficient payment");
 
-        // Get spot owner and transfer payment
+        // Verify spot owner exists
         address spotOwner = parkingToken.ownerOf(spotId);
         require(spotOwner != address(0), "Invalid spot owner");
         
-        // Transfer payment directly to spot owner
-        (bool success, ) = payable(spotOwner).call{value: msg.value}("");
-        require(success, "Payment transfer failed");
+        // Payment is held in contract until reservation ends
 
-        // Calculate times
-        uint256 startTime = block.timestamp;
-        uint256 endTime = startTime + (durationHours * 1 hours);
-
-        // Create reservation
+        // Create and store reservation
         uint256 reservationId = nextReservationId++;
         reservations[reservationId] = Reservation({
             id: reservationId,
@@ -84,7 +87,8 @@ contract ParkingReservation {
             startTime: startTime,
             endTime: endTime,
             amountPaid: msg.value,
-            isActive: true
+            isActive: true,
+            isPaidOut: false
         });
 
         // Track reservation
@@ -110,18 +114,55 @@ contract ParkingReservation {
         require(reservation.id != 0, "Reservation does not exist");
         require(reservation.isActive, "Reservation already ended");
         require(
-            msg.sender == reservation.user || block.timestamp >= reservation.endTime,
-            "Only user can end early, or wait until time expires"
+            msg.sender == reservation.user || 
+            msg.sender == parkingToken.ownerOf(reservation.spotId) ||
+            block.timestamp >= reservation.endTime,
+            "Not authorized to end reservation"
         );
+
+        // Calculate payouts
+        uint256 ownerPayout;
+        uint256 userRefund;
+        
+        uint256 totalDuration = reservation.endTime - reservation.startTime;
+        
+        if (block.timestamp >= reservation.endTime) {
+            // Reservation completed normally - owner gets full payment
+            ownerPayout = reservation.amountPaid;
+            userRefund = 0;
+        } else if (block.timestamp <= reservation.startTime) {
+            // Cancelled before start - full refund to user
+            ownerPayout = 0;
+            userRefund = reservation.amountPaid;
+        } else {
+            // Ended early - calculate proportional amounts
+            uint256 usedDuration = block.timestamp - reservation.startTime;
+            ownerPayout = (reservation.amountPaid * usedDuration) / totalDuration;
+            userRefund = reservation.amountPaid - ownerPayout;
+        }
 
         // End reservation
         reservation.isActive = false;
+        reservation.isPaidOut = true;
         spotCurrentReservation[reservation.spotId] = 0;
 
         // Mark spot as available again
         parkingToken.setSpotAvailability(reservation.spotId, true);
 
-        emit ReservationEnded(reservationId, reservation.spotId, reservation.user);
+        // Pay the owner for used time
+        if (ownerPayout > 0) {
+            address spotOwner = parkingToken.ownerOf(reservation.spotId);
+            (bool successOwner, ) = payable(spotOwner).call{value: ownerPayout}("");
+            require(successOwner, "Owner payment failed");
+        }
+
+        // Refund user for unused time
+        if (userRefund > 0) {
+            (bool successUser, ) = payable(reservation.user).call{value: userRefund}("");
+            require(successUser, "User refund failed");
+        }
+
+        emit ReservationEnded(reservationId, reservation.spotId, reservation.user, ownerPayout, userRefund);
     }
 
     function getReservation(uint256 reservationId) external view returns (Reservation memory) {

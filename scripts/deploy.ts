@@ -32,12 +32,18 @@ async function main() {
   console.log("Minting example parking spots...");
   const [deployer] = await ethers.getSigners();
 
+  // Set availability period: from now to 30 days from now
+  const now = Math.floor(Date.now() / 1000);
+  const thirtyDaysFromNow = now + (30 * 24 * 60 * 60);
+
   await (await parkingToken.mintParkingSpot(
     deployer.address,
     "Downtown Plaza",
     "A-101",
     ethers.parseEther("0.01"),
-    "ipfs://QmExample1"
+    "ipfs://QmExample1",
+    now,
+    thirtyDaysFromNow
   )).wait();
   console.log("Minted: Downtown Plaza A-101");
 
@@ -46,7 +52,9 @@ async function main() {
     "City Center Mall",
     "B-205",
     ethers.parseEther("0.015"),
-    "ipfs://QmExample2"
+    "ipfs://QmExample2",
+    now,
+    thirtyDaysFromNow
   )).wait();
   console.log("Minted: City Center Mall B-205");
 
@@ -55,7 +63,9 @@ async function main() {
     "Airport Parking",
     "C-310",
     ethers.parseEther("0.02"),
-    "ipfs://QmExample3"
+    "ipfs://QmExample3",
+    now,
+    thirtyDaysFromNow
   )).wait();
   console.log("Minted: Airport Parking C-310");
 

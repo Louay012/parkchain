@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { ethers } from "ethers"
 import { useWallet } from "../context/WalletContext"
+import { CONTRACTS, PARKING_RESERVATION_ABI, PARKING_TOKEN_ABI } from "../lib/contracts"
 import { Receipt, ArrowUpRight, ArrowDownLeft } from "lucide-react"
 import { toast } from "sonner"
 import type { Payment } from "../types"
@@ -10,6 +12,7 @@ export function PaymentHistory() {
   const { provider, account } = useWallet()
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({ totalSpent: "0", totalEarned: "0" })
 
   useEffect(() => {
     const fetchPayments = async () => {
@@ -20,9 +23,98 @@ export function PaymentHistory() {
 
       setLoading(true)
       try {
-        // In production this would fetch from PaymentProcessor contract events
-        const mockPayments: Payment[] = []
-        setPayments(mockPayments)
+        const reservationContract = new ethers.Contract(CONTRACTS.PARKING_RESERVATION, PARKING_RESERVATION_ABI, provider)
+        const tokenContract = new ethers.Contract(CONTRACTS.PARKING_TOKEN, PARKING_TOKEN_ABI, provider)
+
+        // Get ReservationCreated events (payments made)
+        const createdFilter = reservationContract.filters.ReservationCreated()
+        const createdEvents = await reservationContract.queryFilter(createdFilter)
+
+        // Get ReservationEnded events (for refunds)
+        const endedFilter = reservationContract.filters.ReservationEnded()
+        const endedEvents = await reservationContract.queryFilter(endedFilter)
+
+        const allPayments: Payment[] = []
+        let totalSpent = 0n
+        let totalEarned = 0n
+
+        // Process reservation created events
+        for (const event of createdEvents) {
+          const args = (event as any).args
+          const block = await event.getBlock()
+          const spotId = Number(args[1])
+          const user = args[2]
+          const amountPaid = args[5]
+
+          // Get spot owner
+          let spotOwner = ""
+          try {
+            spotOwner = await tokenContract.ownerOf(spotId)
+          } catch {
+            continue
+          }
+
+          const isUserPayment = user.toLowerCase() === account.toLowerCase()
+          const isOwnerReceiving = spotOwner.toLowerCase() === account.toLowerCase()
+
+          if (isUserPayment) {
+            // User made this payment
+            allPayments.push({
+              id: allPayments.length + 1,
+              from: user,
+              to: spotOwner,
+              amount: ethers.formatEther(amountPaid),
+              timestamp: block.timestamp,
+              purpose: `Parking Reservation #${Number(args[0])}`,
+              isIncoming: false,
+            })
+            totalSpent += amountPaid
+          }
+
+          if (isOwnerReceiving && !isUserPayment) {
+            // Owner received this payment (but wasn't the one who paid)
+            allPayments.push({
+              id: allPayments.length + 1,
+              from: user,
+              to: spotOwner,
+              amount: ethers.formatEther(amountPaid),
+              timestamp: block.timestamp,
+              purpose: `Parking Earnings - Spot #${spotId}`,
+              isIncoming: true,
+            })
+            totalEarned += amountPaid
+          }
+        }
+
+        // Process refund events
+        for (const event of endedEvents) {
+          const args = (event as any).args
+          const block = await event.getBlock()
+          const user = args[2]
+          const userRefund = args[4]
+
+          if (user.toLowerCase() === account.toLowerCase() && userRefund > 0n) {
+            allPayments.push({
+              id: allPayments.length + 1,
+              from: CONTRACTS.PARKING_RESERVATION,
+              to: user,
+              amount: ethers.formatEther(userRefund),
+              timestamp: block.timestamp,
+              purpose: `Refund - Reservation #${Number(args[0])}`,
+              isIncoming: true,
+            })
+            totalEarned += userRefund
+          }
+        }
+
+        // Sort by timestamp descending (most recent first)
+        allPayments.sort((a, b) => b.timestamp - a.timestamp)
+
+        setPayments(allPayments)
+        setStats({
+          totalSpent: ethers.formatEther(totalSpent),
+          totalEarned: ethers.formatEther(totalEarned),
+        })
       } catch (error) {
         console.error("Failed to fetch payments:", error)
         toast.error("Failed to load payment history")
@@ -58,8 +150,8 @@ export function PaymentHistory() {
       {/* Stats Cards */}
       <div className="grid gap-4 sm:grid-cols-3">
         {[
-          { label: "Total Spent", value: "0.000 ETH" },
-          { label: "Total Earned", value: "0.000 ETH", highlight: true },
+          { label: "Total Spent", value: `${parseFloat(stats.totalSpent).toFixed(4)} ETH` },
+          { label: "Total Earned", value: `${parseFloat(stats.totalEarned).toFixed(4)} ETH`, highlight: true },
           { label: "Transactions", value: payments.length.toString() },
         ].map((stat) => (
           <div key={stat.label} className="rounded-lg border border-border bg-card p-4">

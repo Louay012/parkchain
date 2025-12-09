@@ -34,7 +34,7 @@ export function ParkingSpotList({ onReserve }: ParkingSpotListProps) {
 
       for (let i = 1; i <= Number(totalSupply); i++) {
         try {
-          const [location, spotNumber, pricePerHour, isAvailable, imageURI] = await contract.getParkingSpot(i)
+          const [location, spotNumber, pricePerHour, isAvailable, imageURI, availableFrom, availableTo] = await contract.getParkingSpot(i)
           const owner = await contract.ownerOf(i)
 
           spotsData.push({
@@ -45,6 +45,8 @@ export function ParkingSpotList({ onReserve }: ParkingSpotListProps) {
             isAvailable,
             imageURI,
             owner,
+            availableFrom: Number(availableFrom),
+            availableTo: Number(availableTo),
           })
         } catch (error) {
           console.error(`Error fetching spot ${i}:`, error)
@@ -179,6 +181,9 @@ export function ParkingSpotList({ onReserve }: ParkingSpotListProps) {
                 <div className="flex items-center gap-2 text-sm">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium text-primary">{spot.pricePerHour} ETH/hour</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Available: {new Date(spot.availableFrom * 1000).toLocaleDateString()} - {new Date(spot.availableTo * 1000).toLocaleDateString()}
                 </div>
               </div>
               <div className="p-4 pt-0">
