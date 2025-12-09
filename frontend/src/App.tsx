@@ -8,7 +8,7 @@ import { Dashboard } from "./components/Dashboard"
 import { ParkingSpotList } from "./components/ParkingSpotList"
 import { MyReservations } from "./components/MyReservations"
 import { ListParkingForm } from "./components/ListParkingForm"
-import { PaymentHistory } from "./components/PaymentHistory"
+import { Payments } from "./components/Payments"
 import { ReservationModal } from "./components/ReservationModal"
 import { QRCodeModal } from "./components/QRCodeModal"
 import { WalletProvider } from "./context/WalletContext"
@@ -82,7 +82,7 @@ function ParkChainApp() {
           {currentView === "spots" && <ParkingSpotList onReserve={handleReserveSpot} />}
           {currentView === "reservations" && <MyReservations onShowQR={handleShowQR} />}
           {currentView === "list" && <ListParkingForm onSuccess={() => setCurrentView("spots")} />}
-          {currentView === "payments" && <PaymentHistory />}
+          {currentView === "payments" && <Payments />}
         </main>
       </div>
 

@@ -42,7 +42,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const switchNetwork = useCallback(async () => {
     if (!window.ethereum) {
-      toast.error("MetaMask not found")
+      toast.error("MetaMask not installed. Please install MetaMask to continue.")
       return
     }
 
@@ -57,7 +57,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       // Wait for chain to actually switch
       await new Promise((resolve) => setTimeout(resolve, 1000))
-      toast.success("Switched to Hardhat network")
+      toast.success("Switched to the correct network")
     } catch (error: any) {
       console.error("Switch network error:", error.code, error.message)
       
@@ -65,7 +65,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         try {
           console.log("Network not found, adding it...")
           const chainIdHex = `0x${NETWORK.CHAIN_ID.toString(16)}`
-          
+        
           await window.ethereum.request({
             method: "wallet_addEthereumChain",
             params: [
@@ -81,21 +81,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           
           // Wait for network to be added
           await new Promise((resolve) => setTimeout(resolve, 1000))
-          toast.success("Hardhat network added successfully")
+          toast.success("Network added successfully")
         } catch (addError) {
           console.error("Failed to add network:", addError)
-          toast.error("Failed to add Hardhat network")
+          toast.error("Unable to add the local network. Please try again.")
         }
       } else {
         console.error("Failed to switch network:", error)
-        toast.error("Failed to switch network. Please switch manually in MetaMask.")
+        toast.error("Could not switch network automatically. Please switch manually in MetaMask.")
       }
     }
   }, [])
 
   const connectWallet = useCallback(async () => {
     if (typeof window === "undefined" || !window.ethereum) {
-      toast.error("MetaMask not detected. Please install MetaMask.")
+        toast.error("MetaMask not found. Please install the MetaMask extension.")
       return
     }
 
@@ -131,7 +131,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       toast.success("Wallet connected successfully!")
     } catch (error: any) {
       console.error("Failed to connect wallet:", error)
-      toast.error(error.message || "Failed to connect wallet")
+      toast.error("Unable to connect wallet. Please try again.")
       setIsConnecting(false)
     } finally {
       setIsConnecting(false)
@@ -144,7 +144,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setChainId(null)
     setProvider(null)
     setSigner(null)
-    toast.info("Wallet disconnected")
+    toast.info("Wallet disconnected successfully")
   }, [])
 
   useEffect(() => {
@@ -168,9 +168,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setChainId(newChainId)
       
       if (newChainId !== NETWORK.CHAIN_ID) {
-        toast.error("You are on the wrong network. Please switch to Hardhat.")
+        toast.error("You're on a different network. Please switch to the local network in MetaMask.")
       } else {
-        toast.success("Switched to correct network!")
+        toast.success("Successfully switched to the correct network")
       }
     }
 

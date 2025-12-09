@@ -1,13 +1,13 @@
 // Contract configuration
 export const CONTRACTS = {
-  PARKING_TOKEN: "0x8a503Ca9a911C54593BAE8cbb57b1098324d9236",
-  PARKING_RESERVATION: "0xf19b14bCcB02f18AD11817f624CEB15a04fab247",
+  PARKING_TOKEN: "0x7f8bb16cB618BB60F6dd34e8e8Da068523d6be03",
+  PARKING_RESERVATION: "0x0729836f107Ad13C2fE622Fac70f0077F0c48813",
 } as const
 
 export const PARKING_TOKEN_ABI = [
-  "function mintParkingSpot(address to, string memory location, string memory spotNumber, uint256 pricePerHour, string memory imageURI, uint256 availableFrom, uint256 availableTo) public returns (uint256)",
+  "function mintParkingSpot(address to, string location, string spotNumber, uint256 pricePerHour, string imageURI, uint256 availableFrom, uint256 availableTo) public returns (uint256)",
   "function setSpotAvailability(uint256 tokenId, bool isAvailable) external",
-  "function getParkingSpot(uint256 tokenId) external view returns (string memory location, string memory spotNumber, uint256 pricePerHour, bool isAvailable, string memory imageURI, uint256 availableFrom, uint256 availableTo)",
+  "function getParkingSpot(uint256 tokenId) external view returns (string location, string spotNumber, uint256 pricePerHour, bool isAvailable, string imageURI, uint256 availableFrom, uint256 availableTo)",
   "function ownerOf(uint256 tokenId) external view returns (address)",
   "function totalSupply() public view returns (uint256)",
   "function balanceOf(address owner) external view returns (uint256)",
@@ -17,15 +17,15 @@ export const PARKING_TOKEN_ABI = [
 ] as const
 
 export const PARKING_RESERVATION_ABI = [
-  "function createReservation(uint256 spotId, uint256 startTime, uint256 endTime) external payable",
+  "function createReservation(uint256 tokenId, uint256 startTime, uint256 endTime) external payable returns (uint256)",
   "function endReservation(uint256 reservationId) external",
-  "function getReservation(uint256 reservationId) external view returns (tuple(uint256 id, uint256 spotId, address user, uint256 startTime, uint256 endTime, uint256 amountPaid, bool isActive, bool isPaidOut))",
-  "function getUserReservations(address user) external view returns (tuple(uint256 id, uint256 spotId, address user, uint256 startTime, uint256 endTime, uint256 amountPaid, bool isActive, bool isPaidOut)[])",
-  "function getActiveUserReservations(address user) external view returns (tuple(uint256 id, uint256 spotId, address user, uint256 startTime, uint256 endTime, uint256 amountPaid, bool isActive, bool isPaidOut)[])",
-  "function isSpotAvailable(uint256 spotId) external view returns (bool)",
-  "function getSpotCurrentReservation(uint256 spotId) external view returns (tuple(uint256 id, uint256 spotId, address user, uint256 startTime, uint256 endTime, uint256 amountPaid, bool isActive, bool isPaidOut))",
-  "event ReservationCreated(uint256 indexed reservationId, uint256 indexed spotId, address indexed user, uint256 startTime, uint256 endTime, uint256 amountPaid)",
-  "event ReservationEnded(uint256 indexed reservationId, uint256 indexed spotId, address indexed user, uint256 ownerPayout, uint256 userRefund)",
+  "function isAvailableFor(uint256 tokenId, uint256 startTime, uint256 endTime) external view returns (bool)",
+  "function getReservationsForSpot(uint256 tokenId) external view returns (tuple(uint256 id, address user, uint256 tokenId, uint256 startTime, uint256 endTime, bool active, uint256 paidAmount, bool cancelled, uint256 refundedAmount)[])",
+  "function getReservationById(uint256 reservationId) external view returns (tuple(uint256 id, address user, uint256 tokenId, uint256 startTime, uint256 endTime, bool active, uint256 paidAmount, bool cancelled, uint256 refundedAmount))",
+  "function nextReservationId() external view returns (uint256)",
+  "event ReservationCreated(uint256 indexed reservationId, uint256 indexed tokenId, address indexed user, uint256 startTime, uint256 endTime, uint256 paidAmount)",
+  "event ReservationEnded(uint256 indexed reservationId)",
+  "event ReservationCancelled(uint256 indexed reservationId, uint256 refundedAmount)",
 ] as const
 
 export const PAYMENT_PROCESSOR_ABI = [

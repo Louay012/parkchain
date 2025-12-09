@@ -28,6 +28,12 @@ export function ParkingSpotList({ onReserve }: ParkingSpotListProps) {
 
     setLoading(true)
     try {
+      // sanity check: ensure contract exists at address
+      const code = await provider.getCode(CONTRACTS.PARKING_TOKEN)
+      if (!code || code === "0x") {
+        throw new Error("No ParkingToken contract deployed at configured address for current RPC")
+      }
+
       const contract = new ethers.Contract(CONTRACTS.PARKING_TOKEN, PARKING_TOKEN_ABI, provider)
       const totalSupply = await contract.totalSupply()
       const spotsData: ParkingSpot[] = []
@@ -55,9 +61,9 @@ export function ParkingSpotList({ onReserve }: ParkingSpotListProps) {
 
       setSpots(spotsData)
       setFilteredSpots(spotsData)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch parking spots:", error)
-      toast.error("Failed to load parking spots")
+      toast.error("Unable to load parking spots. Please try again.")
     } finally {
       setLoading(false)
     }

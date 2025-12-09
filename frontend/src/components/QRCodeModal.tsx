@@ -30,12 +30,10 @@ export function QRCodeModal({ reservation, open, onOpenChange }: QRCodeModalProp
     try {
       const qrData = JSON.stringify({
         reservationId: reservation.id,
-        spotId: reservation.spotId,
+        tokenId: reservation.tokenId,
         user: reservation.user,
         startTime: reservation.startTime,
         endTime: reservation.endTime,
-        location: reservation.spotDetails?.location,
-        spotNumber: reservation.spotDetails?.spotNumber,
       })
 
       const url = await QRCode.toDataURL(qrData, {
@@ -47,7 +45,7 @@ export function QRCodeModal({ reservation, open, onOpenChange }: QRCodeModalProp
       setQrCodeUrl(url)
     } catch (error) {
       console.error("Failed to generate QR code:", error)
-      toast.error("Failed to generate QR code")
+      toast.error("Unable to generate QR code. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -65,8 +63,7 @@ export function QRCodeModal({ reservation, open, onOpenChange }: QRCodeModalProp
   const handleCopy = async () => {
     if (!reservation) return
     const text = `ParkChain Reservation #${reservation.id}
-Location: ${reservation.spotDetails?.location || "N/A"}
-Spot: #${reservation.spotDetails?.spotNumber || reservation.spotId}
+Parking Spot: #${reservation.tokenId}
 Valid until: ${new Date(reservation.endTime * 1000).toLocaleString()}`
     await navigator.clipboard.writeText(text)
     setCopied(true)
@@ -112,16 +109,16 @@ Valid until: ${new Date(reservation.endTime * 1000).toLocaleString()}`
               <span className="font-mono">#{reservation.id}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Location</span>
-              <span>{reservation.spotDetails?.location || "N/A"}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Spot</span>
-              <span>#{reservation.spotDetails?.spotNumber || reservation.spotId}</span>
+              <span className="text-muted-foreground">Parking Spot</span>
+              <span>#{reservation.tokenId}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Valid Until</span>
               <span>{formatTime(reservation.endTime)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Amount Paid</span>
+              <span>{reservation.paidAmount} Wei</span>
             </div>
           </div>
 

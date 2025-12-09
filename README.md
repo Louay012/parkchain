@@ -106,7 +106,7 @@ npx hardhat node
 
 In another terminal, deploy contracts:
 ```bash
-npx hardhat run scripts/deploy.ts --network localhost
+npx hardhat run scripts/deploy.ts --network ganache
 ```
 
 ### 🖥️ Start Backend Server

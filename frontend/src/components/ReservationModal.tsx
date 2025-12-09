@@ -56,12 +56,12 @@ export function ReservationModal({ spot, open, onOpenChange, onSuccess }: Reserv
 
   const handleReserve = async () => {
     if (!signer || !account || !spot) {
-      toast.error("Please connect your wallet")
+      toast.error("Please connect your wallet first")
       return
     }
 
     if (!startTime || !endTime) {
-      toast.error("Please select start and end times")
+      toast.error("Please select both start and end times")
       return
     }
 
@@ -70,17 +70,17 @@ export function ReservationModal({ spot, open, onOpenChange, onSuccess }: Reserv
     const now = Math.floor(Date.now() / 1000)
 
     if (endTimestamp <= startTimestamp) {
-      toast.error("End time must be after start time")
+      toast.error("End time must be after the start time")
       return
     }
 
     if (startTimestamp < now) {
-      toast.error("Start time must be in the future")
+      toast.error("Start time cannot be in the past")
       return
     }
 
     if (startTimestamp < spot.availableFrom || endTimestamp > spot.availableTo) {
-      toast.error("Selected time is outside spot availability")
+      toast.error("Selected time is outside the parking spot's availability")
       return
     }
 
@@ -90,45 +90,56 @@ export function ReservationModal({ spot, open, onOpenChange, onSuccess }: Reserv
       const priceInWei = ethers.parseEther(totalPrice)
 
       const tx = await contract.createReservation(spot.id, startTimestamp, endTimestamp, { value: priceInWei })
-      toast.info("Transaction submitted. Waiting for confirmation...")
+      toast.info("Processing your reservation... Please wait.")
       const receipt = await tx.wait()
 
       const iface = new ethers.Interface(PARKING_RESERVATION_ABI)
-      const log = receipt.logs.find((log: any) => {
-        try {
-          const parsed = iface.parseLog(log)
-          return parsed?.name === "ReservationCreated"
-        } catch {
-          return false
-        }
-      })
-
       let reservationId = 1
-      if (log) {
-        const parsed = iface.parseLog(log)
-        reservationId = Number(parsed?.args[0])
+      
+      if (receipt && receipt.logs) {
+        const log = receipt.logs.find((log: any) => {
+          try {
+            const parsed = iface.parseLog(log)
+            return parsed?.name === "ReservationCreated"
+          } catch {
+            return false
+          }
+        })
+
+        if (log) {
+          try {
+            const parsed = iface.parseLog(log)
+            if (parsed) {
+              reservationId = Number(parsed.args[0])
+            }
+          } catch {
+            // Use default reservationId
+          }
+        }
       }
 
       const reservation: Reservation = {
         id: reservationId,
-        spotId: spot.id,
         user: account,
+        tokenId: spot.id,
         startTime: startTimestamp,
         endTime: endTimestamp,
-        amountPaid: totalPrice,
-        isActive: true,
-        spotDetails: spot,
+        active: true,
+        paidAmount: priceInWei.toString(),
+        cancelled: false,
+        refundedAmount: "0",
       }
 
+      toast.success("Reservation created successfully!")
       onSuccess(reservation)
+      onOpenChange(false)
     } catch (error: any) {
       console.error("Failed to create reservation:", error)
-      // Extract error message from various possible locations
-      const errorMessage = error.reason || 
-        error.data?.message || 
-        error.error?.message ||
-        error.message ||
-        "Failed to create reservation"
+      const errorMessage = error.reason === "execution reverted: Overlap" 
+        ? "This time slot is already booked. Please choose another time."
+        : error.reason === "insufficient funds for gas"
+        ? "Insufficient funds. Please check your balance."
+        : "Unable to complete your reservation. Please try again."
       toast.error(errorMessage)
     } finally {
       setLoading(false)

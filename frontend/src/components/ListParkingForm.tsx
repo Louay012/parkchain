@@ -52,7 +52,7 @@ export function ListParkingForm({ onSuccess }: ListParkingFormProps) {
     e.preventDefault()
 
     if (!signer || !account) {
-      toast.error("Please connect your wallet")
+      toast.error("Please connect your wallet first")
       return
     }
 
@@ -77,17 +77,17 @@ export function ListParkingForm({ onSuccess }: ListParkingFormProps) {
         availableToTimestamp,
       )
 
-      toast.info("Transaction submitted. Waiting for confirmation...")
+      toast.info("Publishing your parking spot... Please wait.")
       await tx.wait()
 
-      toast.success("Parking spot listed successfully!")
+      toast.success("Parking spot published! It's now available for reservation.")
       setFormData({ location: "", spotNumber: "", pricePerHour: "", imageURI: "" })
       setAvailableFrom(null)
       setAvailableTo(null)
       onSuccess()
     } catch (error: any) {
       console.error("Failed to list parking spot:", error)
-      toast.error(error.reason || "Failed to list parking spot")
+      toast.error("Unable to publish your parking spot. Please check your input and try again.")
     } finally {
       setLoading(false)
     }
